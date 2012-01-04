@@ -63,10 +63,12 @@ class Duedate_Reminder_all < Mailer
     mailcopy = options[:cc] ? options[:cc] : nil
 
     s = ARCondition.new ["#{IssueStatus.table_name}.is_closed = ? AND #{Issue.table_name}.due_date <= ?", false, days.day.from_now.to_date]
+    s << "#{IssueStatus.table_name}.id != 3"
     s << "#{Issue.table_name}.assigned_to_id IS NOT NULL"
     s << "#{Project.table_name}.status = #{Project::STATUS_ACTIVE}"
     s << "#{Issue.table_name}.project_id = #{project.id}" if project
     s << "#{Issue.table_name}.tracker_id = #{tracker.id}" if tracker
+    s << "#{Issue.table_name}.done_ratio < 100"
     over_due = Array.new
     issues_by_assignee = Issue.find(:all, :include => [:status, :assigned_to, :project, :tracker],
                                           :conditions => s.conditions
