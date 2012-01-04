@@ -27,7 +27,7 @@ Available options:
   * watchers => [0,1] include watched issues (defaults to 0)
   * cc       => send a copy of each message to this address (no copy per default) 
 Example:
-  rake redmine:send_reminders_all days=7 RAILS_ENV="production"
+  rake redmine:send_duedate_reminders_all days=7 RAILS_ENV="production"
 END_DESC
 require File.expand_path(File.dirname(__FILE__) + "/../../../../../config/environment")
 require "mailer"
@@ -44,10 +44,12 @@ class Duedate_Reminder_all < Mailer
       when 2..4 then subject l(:mail_subject_duedate_reminder_all2, :count => ((assigned_issues+auth_issues+watched_issues).uniq.size), :days => days, :day=>day_tag[days>4 ? 4 : days-1])
       else subject l(:mail_subject_duedate_reminder_all5, :count => ((assigned_issues+auth_issues+watched_issues).uniq.size), :days => days, :day=>day_tag[days>4 ? 4 : days-1])
     end
-    body :assigned_issues => assigned_issues,
-         :auth_issues => auth_issues,
-         :watched_issues => watched_issues,
+    body :assigned_issues => assigned_issues.uniq,
+         :auth_issues => auth_issues.uniq,
+         :watched_issues => watched_issues.uniq,
          :days => days,
+         :firstname => user.firstname,
+         :lastname => user.lastname,
          :issues_url => url_for(:controller => 'issues', :action => 'index', :set_filter => 1, :assigned_to_id => user.id, :sort_key => 'due_date', :sort_order => 'asc')
     render_multipart('duedate_reminder_all', body) if (assigned_issues+auth_issues+watched_issues).uniq.size>0
   end
@@ -127,13 +129,13 @@ class Duedate_Reminder_all < Mailer
         issues-=[issue]
       end
       if previous_user == user then
-        if type == "assignee" && notify_assignees == 1 then
+        if type == "assignee" then
           assigned_tasks += issues
           sent_issues += issues
-        elsif type == "author" && notify_authors == 1  then
+        elsif type == "author" then
           auth_tasks += issues
           sent_issues += issues
-        elsif type == "watcher" && notify_watchers == 1  then
+        elsif type == "watcher" then
           watched_tasks += issues
           sent_issues += issues
         end        
@@ -147,25 +149,35 @@ class Duedate_Reminder_all < Mailer
         if watched_tasks.length > 0 then
           watched_tasks.sort! {|a,b| b.due_date <=> a.due_date }
         end
-        deliver_duedate_reminder_all(previous_user, assigned_tasks, auth_tasks, watched_tasks, days, mailcopy) unless previous_user.nil?
+        assigned_tasks.clear if notify_assignees == 0
+        auth_tasks.clear if notify_authors == 0
+        watched_tasks.clear if notify_watchers == 0
+        if ((assigned_tasks+auth_tasks+watched_tasks).uniq.size > 0) then
+          deliver_duedate_reminder_all(previous_user, assigned_tasks, auth_tasks, watched_tasks, days, mailcopy) unless previous_user.nil?
+        end
         watched_tasks.clear
         auth_tasks.clear
         assigned_tasks.clear
         sent_issues.clear
         previous_user=user
-        if type == "assignee" && notify_assignees == 1 then
+        if type == "assignee" then
           assigned_tasks += issues
           sent_issues += issues
-        elsif type == "author" && notify_authors == 1 then
+        elsif type == "author" then
           auth_tasks += issues
           sent_issues += issues
-        elsif type == "watcher" && notify_watchers == 1 then
+        elsif type == "watcher" then
           watched_tasks += issues
           sent_issues += issues
         end
       end
     end
-    deliver_duedate_reminder_all(previous_user, assigned_tasks, auth_tasks, watched_tasks, days, mailcopy) unless previous_user.nil?
+    assigned_tasks.clear if notify_assignees == 0
+    auth_tasks.clear if notify_authors == 0
+    watched_tasks.clear if notify_watchers == 0
+    if ((assigned_tasks+auth_tasks+watched_tasks).uniq.size > 0) then
+      deliver_duedate_reminder_all(previous_user, assigned_tasks, auth_tasks, watched_tasks, days, mailcopy) unless previous_user.nil?
+    end
   end
 end
 
@@ -176,9 +188,9 @@ namespace :redmine do
     options[:project] = ENV['project'] if ENV['project']
     options[:tracker] = ENV['tracker'].to_i if ENV['tracker']
     options[:cc] = ENV['cc'] if ENV['cc']
-    options[:watchers] = ENV['watched'] if ENV['watched']
-    options[:authors] = ENV['authors'] if ENV['authors']
-    options[:assignees] = ENV['assignees'] if ENV['assignees']
+    options[:watchers] = ENV['watchers'].to_i if ENV['watchers']
+    options[:authors] = ENV['authors'].to_i if ENV['authors']
+    options[:assignees] = ENV['assignees'].to_i if ENV['assignees']
     Duedate_Reminder_all.duedate_reminders_all(options)
   end
 end
