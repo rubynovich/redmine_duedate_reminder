@@ -58,7 +58,7 @@ class Duedate_Reminder_all < Mailer
     notify_assignees = options[:assignees] ? options[:assignees] : 1
     notify_watchers = options[:watchers] ? options[:watchers] : 0
     notify_authors = options[:authors] ? options[:authors] : 0 
-    mailcopy = options[:cc] ? nil
+    mailcopy = options[:cc] ? options[:cc] : nil
 
     s = ARCondition.new ["#{IssueStatus.table_name}.is_closed = ? AND #{Issue.table_name}.due_date <= ?", false, days.day.from_now.to_date]
     s << "#{Issue.table_name}.assigned_to_id IS NOT NULL"
