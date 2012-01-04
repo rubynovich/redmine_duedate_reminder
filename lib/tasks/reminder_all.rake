@@ -19,10 +19,13 @@ desc <<-END_DESC
 Send reminders about issues due in the next days.
 
 Available options:
-  * days     => number of days to remind about (defaults to 7)
+  * days     => number of days to remind about (defaults to 5)
   * tracker  => id of tracker (defaults to all trackers)
   * project  => id or identifier of project (defaults to all projects)
-
+  * assignees=> [0,1] include assigned issues (defaults to 1)
+  * authors  => [0,1] include created issues (defaults to 0)
+  * watchers => [0,1] include watched issues (defaults to 0)
+  * cc       => send a copy of each message to this address (no copy per default) 
 Example:
   rake redmine:send_reminders_all days=7 RAILS_ENV="production"
 END_DESC
@@ -30,27 +33,32 @@ require File.expand_path(File.dirname(__FILE__) + "/../../../../../config/enviro
 require "mailer"
 #require "actionmailer"
 
-class Reminder_all < Mailer
-  def reminder_all(user, assigned_issues, auth_issues, watched_issues, days)
+class Duedate_Reminder_all < Mailer
+  def duedate_reminder_all(user, assigned_issues, auth_issues, watched_issues, days, mailcopy)
     set_language_if_valid user.language
     recipients user.mail
-    day_tag=[l(:mail_reminder_all_day1),l(:mail_reminder_all_day2),l(:mail_reminder_all_day2),l(:mail_reminder_all_day2),l(:mail_reminder_all_day5)]
+    cc mailcopy if mailcopy
+    day_tag=[l(:mail_duedate_reminder_all_day1),l(:mail_duedate_reminder_all_day2),l(:mail_duedate_reminder_all_day2),l(:mail_duedate_reminder_all_day2),l(:mail_duedate_reminder_all_day5)]
     case (assigned_issues+auth_issues+watched_issues).uniq.size
-	when 1 then subject l(:mail_subject_reminder_all1, :count => ((assigned_issues+auth_issues+watched_issues).uniq.size), :days => days, :day=>day_tag[days>4 ? 4 : days-1])
-	when 2..4 then subject l(:mail_subject_reminder_all2, :count => ((assigned_issues+auth_issues+watched_issues).uniq.size), :days => days, :day=>day_tag[days>4 ? 4 : days-1])
-	else subject l(:mail_subject_reminder_all5, :count => ((assigned_issues+auth_issues+watched_issues).uniq.size), :days => days, :day=>day_tag[days>4 ? 4 : days-1])
+      when 1 then subject l(:mail_subject_duedate_reminder_all1, :count => ((assigned_issues+auth_issues+watched_issues).uniq.size), :days => days, :day=>day_tag[days>4 ? 4 : days-1])
+      when 2..4 then subject l(:mail_subject_duedate_reminder_all2, :count => ((assigned_issues+auth_issues+watched_issues).uniq.size), :days => days, :day=>day_tag[days>4 ? 4 : days-1])
+      else subject l(:mail_subject_duedate_reminder_all5, :count => ((assigned_issues+auth_issues+watched_issues).uniq.size), :days => days, :day=>day_tag[days>4 ? 4 : days-1])
     end
     body :assigned_issues => assigned_issues,
-	 :auth_issues => auth_issues,
-	 :watched_issues => watched_issues,
+         :auth_issues => auth_issues,
+         :watched_issues => watched_issues,
          :days => days,
          :issues_url => url_for(:controller => 'issues', :action => 'index', :set_filter => 1, :assigned_to_id => user.id, :sort_key => 'due_date', :sort_order => 'asc')
-    render_multipart('reminder_all', body) if (assigned_issues+auth_issues+watched_issues).uniq.size>0
+    render_multipart('duedate_reminder_all', body) if (assigned_issues+auth_issues+watched_issues).uniq.size>0
   end
-  def self.reminders_all(options={})
-    days = options[:days] || 7
+  def self.duedate_reminders_all(options={})
+    days = options[:days] || 5
     project = options[:project] ? Project.find(options[:project]) : nil
     tracker = options[:tracker] ? Tracker.find(options[:tracker]) : nil
+    notify_assignees = options[:assignees] ? options[:assignees] : 1
+    notify_watchers = options[:watchers] ? options[:watchers] : 0
+    notify_authors = options[:authors] ? options[:authors] : 0 
+    mailcopy = options[:cc] ? nil
 
     s = ARCondition.new ["#{IssueStatus.table_name}.is_closed = ? AND #{Issue.table_name}.due_date <= ?", false, days.day.from_now.to_date]
     s << "#{Issue.table_name}.assigned_to_id IS NOT NULL"
@@ -64,13 +72,13 @@ class Reminder_all < Mailer
     issues_by_assignee.each do |assignee, issues|
       found=0
       over_due.each do |person|
-	if person[0].mail == assignee.mail && person[1]=="assignee" then
-	  person << issues
-	  found=1
-	end
+        if person[0].mail == assignee.mail && person[1]=="assignee" then
+          person << issues
+          found=1
+        end
       end
       if found==0 then
-	over_due<<[assignee, "assignee", issues]
+        over_due<<[assignee, "assignee", issues]
       end
     end
     s = ARCondition.new ["#{IssueStatus.table_name}.is_closed = ? AND #{Issue.table_name}.due_date <= ?", false, days.day.from_now.to_date]
@@ -84,28 +92,28 @@ class Reminder_all < Mailer
     issues_by.group_by(&:author).each do |author, issues|
       found=0
       over_due.each do |person|
-	if person[0].mail == author.mail && person[1]=="author" then
-	  person << issues
-	  found=1
-	end
+        if person[0].mail == author.mail && person[1]=="author" then
+          person << issues
+          found=1
+        end
       end
       if found==0 then
-	over_due<<[author, "author", issues]
+        over_due<<[author, "author", issues]
       end
     end
     issues_by.group_by(&:watchers).each do |watchers, issues|
       found_watchers = Array.new
       over_due.each do |person|
-	watchers.each do |watcher|
-	  if person[0].mail == watcher.user.mail && person[1]=="watcher" then
-	    found_watchers << watcher
-	    person[2] += issues
-	  end
-	end
+        watchers.each do |watcher|
+          if person[0].mail == watcher.user.mail && person[1]=="watcher" then
+            found_watchers << watcher
+            person[2] += issues
+          end
+        end
       end
       watchers = watchers - found_watchers
       watchers.each do |watcher|
-	over_due<<[watcher.user, "watcher", issues]
+        over_due<<[watcher.user, "watcher", issues]
       end
     end
     over_due.sort!{|x,y| x[0].mail+x[1] <=> y[0].mail+y[1]}
@@ -119,56 +127,59 @@ class Reminder_all < Mailer
         issues-=[issue]
       end
       if previous_user == user then
-	if type == "assignee" then
-	  assigned_tasks += issues
-	  sent_issues += issues
-	elsif type == "author" then
-	  auth_tasks += issues
-	  sent_issues += issues
-	elsif type == "watcher" then
-	  watched_tasks += issues
-	  sent_issues += issues
-	end	
+        if type == "assignee" && notify_assignees == 1 then
+          assigned_tasks += issues
+          sent_issues += issues
+        elsif type == "author" && notify_authors == 1  then
+          auth_tasks += issues
+          sent_issues += issues
+        elsif type == "watcher" && notify_watchers == 1  then
+          watched_tasks += issues
+          sent_issues += issues
+        end        
       else
-	if assigned_tasks.length > 0 then
-		assigned_tasks.sort! {|a,b| b.due_date <=> a.due_date }
-	end
-	if auth_tasks.length > 0 then
-		auth_tasks.sort! {|a,b| b.due_date <=> a.due_date }
-	end
-	if watched_tasks.length > 0 then
-		watched_tasks.sort! {|a,b| b.due_date <=> a.due_date }
-	end
-	deliver_reminder_all(previous_user, assigned_tasks, auth_tasks, watched_tasks, days) unless previous_user.nil?
-	watched_tasks.clear
-	auth_tasks.clear
-	assigned_tasks.clear
-	sent_issues.clear
-	previous_user=user
-	if type == "assignee" then
-	  assigned_tasks += issues
-	  sent_issues += issues
-	elsif type == "author" then
-	  auth_tasks += issues
-	  sent_issues += issues
-	elsif type == "watcher" then
-	  watched_tasks += issues
-	  sent_issues += issues
-	end
+        if assigned_tasks.length > 0 then
+          assigned_tasks.sort! {|a,b| b.due_date <=> a.due_date }
+        end
+        if auth_tasks.length > 0 then
+          auth_tasks.sort! {|a,b| b.due_date <=> a.due_date }
+        end
+        if watched_tasks.length > 0 then
+          watched_tasks.sort! {|a,b| b.due_date <=> a.due_date }
+        end
+        deliver_duedate_reminder_all(previous_user, assigned_tasks, auth_tasks, watched_tasks, days, mailcopy) unless previous_user.nil?
+        watched_tasks.clear
+        auth_tasks.clear
+        assigned_tasks.clear
+        sent_issues.clear
+        previous_user=user
+        if type == "assignee" && notify_assignees == 1 then
+          assigned_tasks += issues
+          sent_issues += issues
+        elsif type == "author" && notify_authors == 1 then
+          auth_tasks += issues
+          sent_issues += issues
+        elsif type == "watcher" && notify_watchers == 1 then
+          watched_tasks += issues
+          sent_issues += issues
+        end
       end
     end
-    deliver_reminder_all(previous_user, assigned_tasks, auth_tasks, watched_tasks, days) unless previous_user.nil?
+    deliver_duedate_reminder_all(previous_user, assigned_tasks, auth_tasks, watched_tasks, days, mailcopy) unless previous_user.nil?
   end
 end
 
 namespace :redmine do
-  task :send_reminders_all => :environment do
+  task :send_duedate_reminders_all => :environment do
     options = {}
     options[:days] = ENV['days'].to_i if ENV['days']
     options[:project] = ENV['project'] if ENV['project']
     options[:tracker] = ENV['tracker'].to_i if ENV['tracker']
-
-    Reminder_all.reminders_all(options)
+    options[:cc] = ENV['cc'] if ENV['cc']
+    options[:watchers] = ENV['watched'] if ENV['watched']
+    options[:authors] = ENV['authors'] if ENV['authors']
+    options[:assignees] = ENV['assignees'] if ENV['assignees']
+    Duedate_Reminder_all.duedate_reminders_all(options)
   end
 end
 
