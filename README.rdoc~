@@ -4,17 +4,15 @@ E-mail notification of issues due date you are involved in (Assignee, Author, Wa
 
 = Install
 
-  script/plugin install git://github.com/rubynovich/redmine_duedate_reminder.git
+script/plugin install git://github.com/rubynovich/redmine_duedate_reminder.git
 
 *or*
 
-  cd vendor/plugins
-  git clone git://github.com/rubynovich/redmine_duedate_reminder.git
+cd vendor/plugins && git clone git://github.com/rubynovich/redmine_duedate_reminder.git
 
 = Update
 
-  cd vendor/plugins/redmine_duedate_reminder
-  git pull
+cd vendor/plugins/redmine_duedate_reminder && git pull
 
 = Usage
 
