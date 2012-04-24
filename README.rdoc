@@ -13,6 +13,10 @@ E-mail notification of issues due date you are involved in (Assignee, Author, Wa
 
 = Update
 
+  script/plugin update redmine_duedate_reminder
+
+*or*
+
   cd vendor/plugins/redmine_duedate_reminder
   git pull
 
