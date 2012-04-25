@@ -1,6 +1,6 @@
 = Advanced Redmine Notifications
 
-E-mail notification of issues due date you are involved in (Assignee, Author, Watcher)
+E-mail notification of issues due date you are involved in (Assignee, Author, Watcher).
 
 = Install
 

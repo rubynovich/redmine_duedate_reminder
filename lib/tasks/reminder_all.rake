@@ -33,6 +33,28 @@ require File.expand_path(File.dirname(__FILE__) + "/../../../../../config/enviro
 require "mailer"
 #require "actionmailer"
 
+Issue.class_eval do
+  named_scope :assigned, :conditions => "#{Issue.table_name}.assigned_to_id IS NOT NULL"
+  
+  named_scope :not_closed, {:conditions => "#{IssueStatus.table_name}.id != 3", :include => :status}
+  
+  named_scope :active_project, {:conditions => "#{Project.table_name}.status = #{Project::STATUS_ACTIVE}", :include => :project}
+  
+  named_scope :from_project, lambda{ |project| 
+    {:conditions => "#{Issue.table_name}.project_id = #{project.id}"} if project
+  }
+  
+  named_scope :from_tracker, lambda{ |tracker|
+    {:conditions => "#{Issue.table_name}.tracker_id = #{tracker.id}"} if tracker
+  }
+  
+  named_scope :not_completed, {:conditions => "#{Issue.table_name}.done_ratio < 100"}
+  
+  named_scope :must_be_finished, lambda{ |days|
+    {:conditions => ["#{IssueStatus.table_name}.is_closed = ? AND #{Issue.table_name}.due_date <= ?", false, days.day.from_now.to_date], :include => :status}
+  }  
+end
+
 class Duedate_Reminder_all < Mailer
   def duedate_reminder_all(user, assigned_issues, auth_issues, watched_issues, days, mailcopy)
     set_language_if_valid user.language
@@ -62,17 +84,18 @@ class Duedate_Reminder_all < Mailer
     notify_authors = options[:authors] ? options[:authors] : 0 
     mailcopy = options[:cc] ? options[:cc] : nil
 
-    s = ARCondition.new ["#{IssueStatus.table_name}.is_closed = ? AND #{Issue.table_name}.due_date <= ?", false, days.day.from_now.to_date]
-    s << "#{IssueStatus.table_name}.id != 3"
-    s << "#{Issue.table_name}.assigned_to_id IS NOT NULL"
-    s << "#{Project.table_name}.status = #{Project::STATUS_ACTIVE}"
-    s << "#{Issue.table_name}.project_id = #{project.id}" if project
-    s << "#{Issue.table_name}.tracker_id = #{tracker.id}" if tracker
-    s << "#{Issue.table_name}.done_ratio < 100"
     over_due = Array.new
-    issues_by_assignee = Issue.find(:all, :include => [:status, :assigned_to, :project, :tracker],
-                                          :conditions => s.conditions
-                                    ).group_by(&:assigned_to)
+    issues_by_assignee = Issue.
+      assigned.
+      not_closed.
+      active_project.
+      from_project(project).
+      from_tracker(tracker).
+      not_completed.
+      must_be_finished(days).
+      find(:all, :include => [:assigned_to, :tracker]).
+      group_by(&:assigned_to)
+    
     issues_by_assignee.each do |assignee, issues|
       found=0
       over_due.each do |person|
@@ -85,14 +108,14 @@ class Duedate_Reminder_all < Mailer
         over_due<<[assignee, "assignee", issues]
       end
     end
-    s = ARCondition.new ["#{IssueStatus.table_name}.is_closed = ? AND #{Issue.table_name}.due_date <= ?", false, days.day.from_now.to_date]
-    s << "#{Project.table_name}.status = #{Project::STATUS_ACTIVE}"
-    s << "#{Issue.table_name}.project_id = #{project.id}" if project
-    s << "#{Issue.table_name}.tracker_id = #{tracker.id}" if tracker
 
-    issues_by = Issue.find(:all, :include => [:status, :author, :project, :watchers , :tracker],
-                                          :conditions => s.conditions
-                                    )
+    issues_by = Issue.
+      active_project.
+      from_project(project).
+      from_tracker(tracker).
+      must_be_finished(days).
+      find(:all, :include => [:author, :tracker, :watchers])
+
     issues_by.group_by(&:author).each do |author, issues|
       found=0
       over_due.each do |person|
