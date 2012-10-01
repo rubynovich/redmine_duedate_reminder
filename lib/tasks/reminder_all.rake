@@ -143,7 +143,7 @@ class Duedate_Reminder_all < Mailer
         over_due<<[watcher.user, "watcher", issues]
       end
     end
-    over_due.sort!{|x,y| x[0].mail+x[1] <=> y[0].mail+y[1]}
+    over_due.sort_by!{|x| "#{x[0].mail}#{x[1]}" }
     previous_user = over_due[0][0]
     watched_tasks = Array.new
     auth_tasks = Array.new
