@@ -1,3 +1,7 @@
+= Напоминалка о просроченных задачах (модуль Redmine)
+
+Рассылает напоминания посредством E-Mail, что срок выполнения задачи уже близок. Рассылка производится как исполнителям, так и авторам с наблюдателями.
+
 = Advanced Redmine Notifications
 
 E-mail notification of issues due date you are involved in (Assignee, Author, Watcher).
