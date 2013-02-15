@@ -5,12 +5,12 @@
 # modify it under the terms of the GNU General Public License
 # as published by the Free Software Foundation; either version 2
 # of the License, or (at your option) any later version.
-# 
+#
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-# 
+#
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
@@ -25,55 +25,59 @@ Available options:
   * assignees=> [0,1] include assigned issues (defaults to 1)
   * authors  => [0,1] include created issues (defaults to 0)
   * watchers => [0,1] include watched issues (defaults to 0)
-  * cc       => send a copy of each message to this address (no copy per default) 
+  * cc       => send a copy of each message to this address (no copy per default)
 Example:
   rake redmine:send_duedate_reminders_all days=7 RAILS_ENV="production"
 END_DESC
-require File.expand_path(File.dirname(__FILE__) + "/../../../../../config/environment")
+if Rails::VERSION::MAJOR < 3
+  require File.expand_path(File.dirname(__FILE__) + "/../../../../../config/environment")
+else
+  require File.expand_path(File.dirname(__FILE__) + "/../../../../config/environment")
+end
 require "mailer"
 #require "actionmailer"
 
 Issue.class_eval do
   if Rails::VERSION::MAJOR < 3
     named_scope :assigned, :conditions => "#{Issue.table_name}.assigned_to_id IS NOT NULL"
-    
+
     named_scope :not_closed, {:conditions => "#{IssueStatus.table_name}.id != 3", :include => :status}
-    
+
     named_scope :active_project, {:conditions => "#{Project.table_name}.status = #{Project::STATUS_ACTIVE}", :include => :project}
-    
-    named_scope :from_project, lambda{ |project| 
+
+    named_scope :from_project, lambda{ |project|
       {:conditions => "#{Issue.table_name}.project_id = #{project.id}"} if project.present?
     }
-    
+
     named_scope :from_tracker, lambda{ |tracker|
       {:conditions => "#{Issue.table_name}.tracker_id = #{tracker.id}"} if tracker.present?
     }
-    
+
     named_scope :not_completed, {:conditions => "#{Issue.table_name}.done_ratio < 100"}
-    
+
     named_scope :must_be_finished, lambda{ |days|
       {:conditions => ["#{IssueStatus.table_name}.is_closed = ? AND #{Issue.table_name}.due_date <= ?", false, days.day.from_now.to_date], :include => :status}
-    }  
+    }
   else
     scope :assigned, where("#{Issue.table_name}.assigned_to_id IS NOT NULL")
-    
+
     scope :not_closed, {:conditions => "#{IssueStatus.table_name}.id != 3", :include => :status}
-    
+
     scope :active_project, {:conditions => "#{Project.table_name}.status = #{Project::STATUS_ACTIVE}", :include => :project}
-    
-    scope :from_project, lambda{ |project| 
+
+    scope :from_project, lambda{ |project|
       {:conditions => "#{Issue.table_name}.project_id = #{project.id}"} if project.present?
     }
-    
+
     scope :from_tracker, lambda{ |tracker|
       {:conditions => "#{Issue.table_name}.tracker_id = #{tracker.id}"} if tracker.present?
     }
-    
+
     scope :not_completed, where("#{Issue.table_name}.done_ratio < 100")
-    
+
     scope :must_be_finished, lambda{ |days|
       {:conditions => ["#{IssueStatus.table_name}.is_closed = ? AND #{Issue.table_name}.due_date <= ?", false, days.day.from_now.to_date], :include => :status}
-    }  
+    }
   end
 end
 
@@ -103,7 +107,7 @@ class Duedate_Reminder_all < Mailer
     tracker = options[:tracker] ? Tracker.find(options[:tracker]) : nil
     notify_assignees = options[:assignees] ? options[:assignees] : 1
     notify_watchers = options[:watchers] ? options[:watchers] : 0
-    notify_authors = options[:authors] ? options[:authors] : 0 
+    notify_authors = options[:authors] ? options[:authors] : 0
     mailcopy = options[:cc] ? options[:cc] : nil
 
     over_due = Array.new
@@ -117,7 +121,7 @@ class Duedate_Reminder_all < Mailer
       must_be_finished(days).
       find(:all, :include => [:assigned_to, :tracker]).
       group_by(&:assigned_to)
-    
+
     issues_by_assignee.each do |assignee, issues|
       found=0
       over_due.each do |person|
@@ -186,7 +190,7 @@ class Duedate_Reminder_all < Mailer
         elsif type == "watcher" then
           watched_tasks += issues
           sent_issues += issues
-        end        
+        end
       else
         if assigned_tasks.length > 0 then
           assigned_tasks.sort! {|a,b| b.due_date <=> a.due_date }
@@ -242,4 +246,3 @@ namespace :redmine do
     Duedate_Reminder_all.duedate_reminders_all(options)
   end
 end
-
