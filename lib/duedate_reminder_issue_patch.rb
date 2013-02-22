@@ -1,6 +1,6 @@
 require_dependency 'issue'
 
-module DuedateREminderPlugin
+module DuedateReminderPlugin
   module IssuePatch
     def self.included(base)
       base.extend(ClassMethods)
