@@ -29,12 +29,15 @@ Available options:
 Example:
   rake redmine:send_duedate_reminders_all days=7 RAILS_ENV="production"
 END_DESC
-if Rails::VERSION::MAJOR < 3
+mailer = if Rails::VERSION::MAJOR < 3
   require File.expand_path(File.dirname(__FILE__) + "/../../../../../config/environment")
   require "mailer"
+  Mailer
+else
+  ActionMailer::Base
 end
 
-class Duedate_Reminder_all < Mailer
+class Duedate_Reminder_all < mailer
   def duedate_reminder_all(user, assigned_issues, auth_issues, watched_issues, days, mailcopy)
     set_language_if_valid user.language
     recipients user.mail
