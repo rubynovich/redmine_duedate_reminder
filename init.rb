@@ -4,7 +4,7 @@ Redmine::Plugin.register :redmine_duedate_reminder do
   name 'Duedate reminder'
   author 'Roman Shipiev'
   description 'E-mail notification of issues due date you are involved in (Assignee, Author, Watcher)'
-  version '0.0.4'
+  version '0.0.5'
   url 'https://github.com/rubynovich/redmine_duedate_reminder'
   author_url 'http://roman.shipiev.me'
 end
@@ -17,12 +17,13 @@ else
 end
 
 object_to_prepare.to_prepare do
-  [:issue].each do |cl|
+  [:issue, :mailer].each do |cl|
     require "duedate_reminder_#{cl}_patch"
   end
 
   [
-    [Issue, DuedateReminderPlugin::IssuePatch]
+    [Issue, DuedateReminderPlugin::IssuePatch],
+    [Mailer, DuedateReminderPlugin::MailerPatch]
   ].each do |cl, patch|
     cl.send(:include, patch) unless cl.included_modules.include? patch
   end

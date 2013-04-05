@@ -41,7 +41,8 @@ namespace :redmine do
     options[:authors] = ENV['authors'].to_i if ENV['authors']
     options[:assignees] = ENV['assignees'].to_i if ENV['assignees']
 #    DuedateReminderMailer.duedate_reminders_all(options)
-    options[:users] = User.active.where("mail_notification <> ?", "none").select(:id).map(&:id)
-    Mailer.reminders(options)
+#    options[:users] = User.active.where("mail_notification <> ?", "none").select(:id).map(&:id)
+#    Mailer.reminders(options)
+    Mailer.duedate_reminders_all(options)
   end
 end
