@@ -80,66 +80,45 @@ module DuedateReminderPlugin
             over_due<<[watcher.user, "watcher", issues]
           end
         end
-        return unless over_due.present?
+        return if over_due.blank?
+
         over_due = over_due.sort_by{|x| "#{x[0].mail}#{x[1]}" }
         previous_user = over_due[0][0]
-        watched_tasks = Array.new
-        auth_tasks = Array.new
-        assigned_tasks = Array.new
-        sent_issues = Array.new
+        watched_tasks, auth_tasks, assigned_tasks, sent_issues = [], [], [], []
+
         over_due.each do |user, type, issues|
           sent_issues.each do |issue|
-            issues-=[issue]
+            issues -= [issue]
           end
-          if previous_user == user then
-            if type == "assignee" then
-              assigned_tasks += issues
-              sent_issues += issues
-            elsif type == "author" then
-              auth_tasks += issues
-              sent_issues += issues
-            elsif type == "watcher" then
-              watched_tasks += issues
-              sent_issues += issues
-            end
-          else
-            if assigned_tasks.length > 0 then
-              assigned_tasks.sort! {|a,b| b.due_date <=> a.due_date }
-            end
-            if auth_tasks.length > 0 then
-              auth_tasks.sort! {|a,b| b.due_date <=> a.due_date }
-            end
-            if watched_tasks.length > 0 then
-              watched_tasks.sort! {|a,b| b.due_date <=> a.due_date }
-            end
-            assigned_tasks.clear if notify_assignees == 0
-            auth_tasks.clear if notify_authors == 0
-            watched_tasks.clear if notify_watchers == 0
-            if ((assigned_tasks+auth_tasks+watched_tasks).uniq.size > 0) then
-              duedate_reminder_all(previous_user, assigned_tasks, auth_tasks, watched_tasks, days, mailcopy).deliver unless previous_user.nil?
+          if previous_user != user
+            assigned_tasks = assigned_tasks.sort_by(&:due_date).reverse if assigned_tasks.present?
+            auth_tasks = auth_tasks.sort_by(&:due_date).reverse         if auth_tasks.present?
+            watched_tasks = watched_tasks.sort_by(&:due_date).reverse   if watched_tasks.present?
+            assigned_tasks.clear if notify_assignees.zero?
+            auth_tasks.clear     if notify_authors.zero?
+            watched_tasks.clear  if notify_watchers.zero?
+            if (assigned_tasks | auth_tasks | watched_tasks).present? && previous_user.present?
+              duedate_reminder_all(previous_user, assigned_tasks, auth_tasks, watched_tasks, days, mailcopy).deliver
             end
             watched_tasks.clear
             auth_tasks.clear
             assigned_tasks.clear
             sent_issues.clear
-            previous_user=user
-            if type == "assignee" then
-              assigned_tasks += issues
-              sent_issues += issues
-            elsif type == "author" then
-              auth_tasks += issues
-              sent_issues += issues
-            elsif type == "watcher" then
-              watched_tasks += issues
-              sent_issues += issues
-            end
+            previous_user = user
           end
+          case type
+            when "assignee" then assigned_tasks += issues
+            when "author"   then auth_tasks += issues
+            when "watcher"  then watched_tasks += issues
+          end
+          sent_issues += issues
         end
-        assigned_tasks.clear if notify_assignees == 0
-        auth_tasks.clear if notify_authors == 0
-        watched_tasks.clear if notify_watchers == 0
-        if ((assigned_tasks+auth_tasks+watched_tasks).uniq.size > 0) then
-          duedate_reminder_all(previous_user, assigned_tasks, auth_tasks, watched_tasks, days, mailcopy).deliver unless previous_user.nil?
+
+        assigned_tasks.clear if notify_assignees.zero?
+        auth_tasks.clear     if notify_authors.zero?
+        watched_tasks.clear  if notify_watchers.zero?
+        if (assigned_tasks | auth_tasks | watched_tasks).present? && previous_user.present?
+          duedate_reminder_all(previous_user, assigned_tasks, auth_tasks, watched_tasks, days, mailcopy).deliver
         end
       end
     end
@@ -148,7 +127,7 @@ module DuedateReminderPlugin
       def duedate_reminder_all(user, assigned_issues, auth_issues, watched_issues, days, mailcopy)
         set_language_if_valid user.language
         day_tag = [l(:mail_duedate_reminder_all_day1),l(:mail_duedate_reminder_all_day2),l(:mail_duedate_reminder_all_day2),l(:mail_duedate_reminder_all_day2),l(:mail_duedate_reminder_all_day5)]
-        issues_count = (assigned_issues+auth_issues+watched_issues).uniq.size
+        issues_count = (assigned_issues | auth_issues | watched_issues).size
         subject = case issues_count
           when 1 then  l(:mail_subject_duedate_reminder_all1, :count => issues_count, :days => days, :day => day_tag[days>4 ? 4 : days-1])
           when 2..4 then l(:mail_subject_duedate_reminder_all2, :count => issues_count, :days => days, :day => day_tag[days>4 ? 4 : days-1])
@@ -161,7 +140,7 @@ module DuedateReminderPlugin
         @firstname = user.firstname
         @lastname = user.lastname
         @issues_url = url_for(:controller => 'issues', :action => 'index', :set_filter => 1, :assigned_to_id => user.id, :sort_key => 'due_date', :sort_order => 'asc')
-        mail(:to => user.mail, :cc => mailcopy, :subject => subject) if (assigned_issues+auth_issues+watched_issues).uniq.size>0
+        mail(:to => user.mail, :cc => mailcopy, :subject => subject) if user.mail.present? && (assigned_issues | auth_issues | watched_issues).size>0
       end
     end
   end
